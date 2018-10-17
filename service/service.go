@@ -611,7 +611,7 @@ func (s *server) GoJavaRequestEvent(stream sv.GoEventService_GoJavaRequestEventS
 		req, err := stream.Recv()
 		if err == io.EOF {
 			fmt.Println("read done")
-			return err
+			return nil
 		}
 		if err != nil {
 			fmt.Println("Server GoJavaRequestEvent Stream ERR", err)
@@ -759,7 +759,7 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 func TaskEvent(txid string, s *server) {
 	value, ok := TxidsMap.Load(txid) //map 中不存在，
 	if ok {
-		serviceLog.Info("enter TaskEvent txid",txid)
+		serviceLog.Info("enter TaskEvent txid", txid)
 		voteVal := value.(VoteAccount)
 		totalNods := voteVal.totalNodes*1/3 + 1
 		voteAmountSu := int32(len(voteVal.votesSuccessMap))
