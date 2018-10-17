@@ -759,6 +759,7 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 func TaskEvent(txid string, s *server) {
 	value, ok := TxidsMap.Load(txid) //map 中不存在，
 	if ok {
+		serviceLog.Info("enter TaskEvent txid",txid)
 		voteVal := value.(VoteAccount)
 		totalNods := voteVal.totalNodes*1/3 + 1
 		voteAmountSu := int32(len(voteVal.votesSuccessMap))
