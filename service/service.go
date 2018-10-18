@@ -32,9 +32,6 @@ func (p Password) Redacted() interface{} {
 }
 
 const (
-	port = ":8852"
-)
-const (
 	code1000 = "1000"
 	code1001 = "1001"
 	code1002 = "1002"
@@ -97,6 +94,9 @@ type GoChainRequestReqAsc struct {
 // 缓存交易情况的map
 var TxidsMap *sync.Map
 
+// 缓存send java消息的stream 判断是不是重启java客户端 造成stream重复
+var StreamMap *sync.Map
+
 // 缓存交易情况的map 中的value
 type VoteAccount struct {
 	txid       string
@@ -114,6 +114,8 @@ type VoteAccount struct {
 // 缓存ip地址对应的
 var AddressMap *sync.Map
 
+var AddressCount int
+
 //
 type ClientTransactionJavaReq struct {
 	TxId       string
@@ -124,8 +126,15 @@ type ClientTransactionJavaReq struct {
 	SendAmount int32
 }
 
+type ClientQuickReq struct {
+	QuickSwitch  bool
+	Address      string
+	AddressCount int
+}
+
 //sdk请求txid 获得交易结果
 var ClientTransactionJavaReqChan chan *ClientTransactionJavaReq
+var ClientQuickReqChan chan *ClientQuickReq
 
 // 建表字段 ghc date 2018年9月25日10点41分
 type ASSETFIELDNAME string
@@ -597,10 +606,43 @@ func (s *server) GoChainRequestCountAscEvent() error {
  */
 func (s *server) GoJavaRequestEvent(stream sv.GoEventService_GoJavaRequestEventServer) error {
 	serviceLog.Info("Server GoJavaRequestEvent enter")
+	var address string
 	s.switchButton = false
+	req, err := stream.Recv()
+	if err == io.EOF {
+		fmt.Println("read done")
+		return nil
+	}
+	if err != nil {
+		fmt.Println("Server GoJavaRequestEvent Stream ERR", err)
+		serviceLog.Error("Server Stream recv err", err)
+		return err
+	}
+	if req != nil {
+		fmt.Println("GoJavaRequestEvent req", req.TxIdRes)
+		address = req.TxIdRes
+	}
+	address = req.TxIdRes
+	value, ok := StreamMap.Load(address)
+	if ok {
+		serviceLog.Info("shut down channel  address", value)
+		cq := &ClientQuickReq{}
+		cq.QuickSwitch = true
+		cq.Address = address
+		AddressCount = AddressCount + 1
+		cq.AddressCount = AddressCount
+		ClientQuickReqChan <- cq
+	}
+	StreamMap.Store(address, address)
+
 	for {
-		var address string
-		req, err := stream.Recv()
+		if !s.switchButton {
+			go func() {
+				//time.Sleep(20)
+				s.SendToJavaMsg(stream, address, AddressCount)
+			}()
+		}
+		req, err = stream.Recv()
 		if err == io.EOF {
 			fmt.Println("read done")
 			return nil
@@ -609,17 +651,6 @@ func (s *server) GoJavaRequestEvent(stream sv.GoEventService_GoJavaRequestEventS
 			fmt.Println("Server GoJavaRequestEvent Stream ERR", err)
 			serviceLog.Error("Server Stream recv err", err)
 			return err
-		}
-		if req != nil {
-			fmt.Println("GoJavaRequestEvent req", req.TxIdRes)
-			address = req.TxIdRes
-		}
-		//tx 成功或失败  推送消息
-		if !s.switchButton {
-			go func() {
-				//time.Sleep(20)
-				s.SendToJavaMsg(stream, address)
-			}()
 		}
 
 	}
@@ -633,7 +664,8 @@ func (s *server) GoJavaRequestEvent(stream sv.GoEventService_GoJavaRequestEventS
 * @date 9/29/18 10:47 AM
 * @version V1.0
  */
-func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer, address string) {
+func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer, address string, addressCount int) {
+	var ipr string
 	s.switchButton = true
 	var voteValAddress string
 	// 注册时的IP 地址 对应返回的address
@@ -680,7 +712,7 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 			// 从交易缓存中获取txid 对应的 IP
 
 			val, ok := TxidsMap.Load(txidd)
-			var ipr string
+
 			if !ok {
 				sql := fmt.Sprintf("select %s  from %s where %s = '%s'",
 					TXIP, s.ec.Config.EventmsgtableName, TXID, txidd)
@@ -735,6 +767,11 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 				// 若消息取出来判断无法发送 则重新塞入管道中
 				time.Sleep(1 * time.Second)
 				ClientTransactionJavaReqChan <- cj
+			}
+		case qk := <-ClientQuickReqChan:
+			if qk.QuickSwitch && qk.Address == address && qk.AddressCount > addressCount {
+				// 退出
+				return
 			}
 
 		}
@@ -823,12 +860,14 @@ func (s *server) init() {
 	}
 	s.ec = evcf
 	s.addressIdMap = make(map[string]string)
-	TxidsMap = &sync.Map{}                                                       //初始化缓存Ip地址map
+	TxidsMap = &sync.Map{}
+	StreamMap = &sync.Map{}                                                      //初始化缓存Ip地址map
 	AddressMap = &sync.Map{}                                                     //缓存消息票数的队列
 	ClientTransactionJavaReqChan = make(chan *ClientTransactionJavaReq, 1000000) //缓冲100万条数据
 	GoChainRequestReqAscChan = make(chan *GoChainRequestReqAsc, 1000000)
 	GoChainRequestCountAscChan = make(chan *GoChainRequestCountAsc, 1000000)
 	s.updateIspushedChan = make(chan *UpdateIspushedsql, 1000000)
+	ClientQuickReqChan = make(chan *ClientQuickReq, 100) // send java 消息退出管道
 	// 启动十个协成 处理接收的交易id
 	go func() {
 		fmt.Println("enter GoChainRequestEvent")
@@ -954,10 +993,13 @@ func (s *server) createTable() {
 
 func main() {
 	// 初始化日志
-	logFactory.Init()
+	go func() {
+		logFactory.Init()
+	}()
+	time.Sleep(5 * time.Second)
 	serv := &server{}
 	serv.createTable()
-	lis, err := net.Listen("tcp", port)
+	lis, err := net.Listen("tcp", db.Port)
 	if err != nil {
 		fmt.Println("failed to listen: %v", err)
 	}

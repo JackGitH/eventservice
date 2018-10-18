@@ -14,6 +14,8 @@ type DbHandler struct {
 	Db *sql.DB
 }
 
+var Port string
+
 var registerDbLog = logging.MustGetLogger("registerDb")
 
 /**
@@ -34,6 +36,8 @@ func (dh *DbHandler) GetDbHandler() (db *DbHandler, err error) {
 	userName := ev.Config.Username
 	passwd := ev.Config.Passwd
 	dataBaseName := ev.Config.DataBaseName
+	mport := ev.Config.Mport
+	Port = ":" + mport
 
 	dbh, err := sql.Open("mysql", userName+":"+passwd+"@tcp("+ip+":"+port+")/"+"?charset=utf8&multiStatements=true")
 

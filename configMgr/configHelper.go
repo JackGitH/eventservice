@@ -61,7 +61,7 @@ func (evs *EventConfig) NewEventConfig() (econfig *EventConfig, err error) {
 	idleConn := ec.GetInt("mysql.idleConn")
 	maxConn := ec.GetInt("mysql.maxConn")
 	libName := ec.GetString("mysql.libName")
-	mport := ec.GetString("mysql.mport")
+	mport := ec.GetString("monitor.mport")
 	conf := &Config{
 		Ip:                ip,
 		Port:              port,

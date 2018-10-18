@@ -27,7 +27,6 @@ import (
 
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
-	//"uchains/common"
 )
 
 // A logger to log logging logs!
@@ -471,32 +470,50 @@ func DefaultLoggingLevel() logging.Level {
 }
 
 // Initiate 'leveled' logging to stderr.
+var Switcha bool
 
 func Init() {
+	Switcha = true
+	for {
+		t := time.Now()
+		tim := t.String()[0:10] + "_" + t.String()[11:13]
+		time.Sleep(1 * time.Second)
+		t1 := time.Now()
+		tim1 := t1.String()[0:10] + "_" + t.String()[11:13]
 
-	format := logging.MustStringFormatter(
-		"%{color}%{time:20060102150405.000} [%{module}] %{shortfunc} -> %{level:.4s} %{id:03x}%{color:reset} %{message}",
-	)
-	logFileDir := "loggings"
-	Mkdirlog(logFileDir)
-	logFile := "eventserver.log"
+		if tim != tim1 || Switcha {
+			//logFile := "eventserver.log." + tim[0:10] + "_" + tim[11:13]
+			logFile := "eventserver.log." + tim1
+			if Switcha {
+				logFile = "eventserver.log"
+			}
+			Switcha = false
 
-	logs := logFileDir + "/" + logFile
+			format := logging.MustStringFormatter(
+				"%{color}%{time:20060102150405.000} [%{module}] %{shortfunc} -> %{level:.4s} %{id:03x}%{color:reset} %{message}",
+			)
+			logFileDir := "loggings"
+			Mkdirlog(logFileDir)
+			//logFile := "eventserver.log"
 
-	logIo, err := os.OpenFile(logs, os.O_CREATE|os.O_WRONLY, 0777)
-	if err != nil {
-		loggingLogger.Errorf("open log file err %s", err)
+			logs := logFileDir + "/" + logFile
+
+			logIo, err := os.OpenFile(logs, os.O_CREATE|os.O_WRONLY, 0777)
+			if err != nil {
+				loggingLogger.Errorf("open log file err %s", err)
+			}
+
+			//SetRollingDaily(logFileDir, logFile,&viper.Viper,callback)
+			//SetRollingFile(logFileDir,logFile,10000000,5,KB)
+
+			backend := logging.NewLogBackend(logIo, "", 0) //err io not close
+
+			//backend := logging.NewLogBackend(os.Stderr, "", 0)
+			backendFormatter := logging.NewBackendFormatter(backend, format)
+
+			logging.SetBackend(backendFormatter).SetLevel(loggingDefaultLevel, "")
+			var serviceLog = logging.MustGetLogger("service")
+			serviceLog.Info("log Division Init By Time")
+		}
 	}
-
-	//SetRollingDaily(logFileDir, logFile,&viper.Viper,callback)
-	//SetRollingFile(logFileDir,logFile,10000000,5,KB)
-
-	backend := logging.NewLogBackend(logIo, "", 0) //err io not close
-
-	//backend := logging.NewLogBackend(os.Stderr, "", 0)
-	backendFormatter := logging.NewBackendFormatter(backend, format)
-
-	logging.SetBackend(backendFormatter).SetLevel(loggingDefaultLevel, "")
-	var serviceLog = logging.MustGetLogger("service")
-	serviceLog.Info("aaaa")
 }
