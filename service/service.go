@@ -59,7 +59,7 @@ const (
 	msgRegist04 = "交易异常"
 
 	constAmount     = 1 / 3 // 1/3容错
-	constSendAmount = 30    // 发送30次失败则不再发送
+	constSendAmount = 100   // 发送30次失败则不再发送
 )
 
 //server核心
@@ -112,7 +112,7 @@ type VoteAccount struct {
 }
 
 // 缓存ip地址对应的
-var AddressMap map[string]string
+var AddressMap *sync.Map
 
 //
 type ClientTransactionJavaReq struct {
@@ -193,7 +193,7 @@ func (s *server) GoClientRegistEvent(ctx context.Context, request *sv.ClientRegi
 	id := Md5Inst.Sum([]byte(""))
 	idStr := hex.EncodeToString(id)
 	// 缓存ip 对应地址 推送消息时使用
-	AddressMap[idStr] = ip
+	AddressMap.Store(idStr, ip)
 
 	if acount == 0 {
 
@@ -637,10 +637,10 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 	s.switchButton = true
 	var voteValAddress string
 	// 注册时的IP 地址 对应返回的address
-	ip := AddressMap[address]
+	ip, ok := AddressMap.Load(address)
 	//fmt.Println("SendToJavaMsg ip", ip)
 	//缓存不存在 去数据库中查
-	if ip == "" {
+	if ip == "" || !ok {
 		sql := fmt.Sprintf("select %s  from %s where %s = '%s'",
 			ECLIENTIP, s.ec.Config.RegisterTableName, ID, address)
 		serviceLog.Info("findRepeat sql", sql)
@@ -709,7 +709,6 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 			if voteValAddress == ip || ipr == ip {
 				err := stream.Send(&sv.ClientTransactionJavaReq{cj.TxId, cj.Ecode, cj.Emessage, cj.ChainId})
 				if err != nil {
-					fmt.Println("SendToJavaMsg send erro", err)
 					serviceLog.Error(cj.TxId+":Server Stream send fail erro", err)
 					// 出错代表没发送成功 重试次数30次 继续塞入管道
 					if cj.SendAmount <= constSendAmount {
@@ -825,7 +824,7 @@ func (s *server) init() {
 	s.ec = evcf
 	s.addressIdMap = make(map[string]string)
 	TxidsMap = &sync.Map{}                                                       //初始化缓存Ip地址map
-	AddressMap = make(map[string]string)                                         //缓存消息票数的队列
+	AddressMap = &sync.Map{}                                                     //缓存消息票数的队列
 	ClientTransactionJavaReqChan = make(chan *ClientTransactionJavaReq, 1000000) //缓冲100万条数据
 	GoChainRequestReqAscChan = make(chan *GoChainRequestReqAsc, 1000000)
 	GoChainRequestCountAscChan = make(chan *GoChainRequestCountAsc, 1000000)
