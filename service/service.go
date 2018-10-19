@@ -430,7 +430,7 @@ func (s *server) GoChainRequestAscEvent() error {
 			voteMap.totalNodes = reqTotalNotes
 			voteMap.votesSuccessMap = make(map[string]string)
 			voteMap.votesFailedMap = make(map[string]string)
-			voteMap.txtask = time.AfterFunc(120*time.Second, func() {
+			voteMap.txtask = time.AfterFunc(600*time.Second, func() {
 				TaskEvent(reqTxId, s)
 			})
 			TxidsMap.Store(reqTxId, voteMap) //缓存txid和票数
@@ -507,9 +507,6 @@ func (s *server) GoChainRequestCountAscEvent() error {
 
 				totalNods := int32(voteVal.totalNodes)*1/3 + 1
 				//todo 统计票数日志 适时删除
-				serviceLog.Info("int32(len(voteVal.votesSuccessMap))", float32(len(voteVal.votesSuccessMap)))
-				serviceLog.Info("voteVal.totalNodes*1/3", totalNods)
-				serviceLog.Info("voteVal.totalNodes", voteVal.totalNodes)
 				var code string
 				var msg string
 				if issuccreq {
@@ -519,6 +516,9 @@ func (s *server) GoChainRequestCountAscEvent() error {
 					//voteVal.srsu.Unlock()
 
 					TxidsMap.Store(txidreq, voteVal)
+					serviceLog.Info("int32(len(voteVal.votesSuccessMap))", int32(len(voteVal.votesSuccessMap)))
+					serviceLog.Info("voteVal.totalNodes*1/3", totalNods)
+					serviceLog.Info("voteVal.totalNodes", voteVal.totalNodes)
 
 					/*TMapRwlock.RLock()
 					value1, ok1 := TxidsMap.Load(txidreq) //map 中不存在，
@@ -542,6 +542,7 @@ func (s *server) GoChainRequestCountAscEvent() error {
 							if err != nil {
 								serviceLog.Error("GoChainRequestCountEvent db set ecode fail txid", txidreq, "GoChainRequestCountEvent sqlFinal err", err)
 							} else {
+								voteVal.txtask.Stop() // 主动停掉定时任务
 								s.totalEventCountTxid++
 								//TxidsMap.Delete(txidreq)
 								tarnsJavaReq := &ClientTransactionJavaReq{}
@@ -567,6 +568,9 @@ func (s *server) GoChainRequestCountAscEvent() error {
 					//voteVal.srfa.Unlock()
 					TxidsMap.Store(txidreq, voteVal)
 					voteAmount := int32(len(voteVal.votesFailedMap))
+					serviceLog.Info("int32(len(voteVal.votesFailedMap))", int32(len(voteVal.votesFailedMap)))
+					serviceLog.Info("voteVal.totalNodes*1/3", totalNods)
+					serviceLog.Info("voteVal.totalNodes", voteVal.totalNodes)
 					fail := voteAmount >= totalNods
 					if fail {
 						code = codereq //todo 这里的失败原因使用的uchains返回的
@@ -578,6 +582,7 @@ func (s *server) GoChainRequestCountAscEvent() error {
 						if err != nil {
 							serviceLog.Error("GoChainRequestCountEvent db set ecode fail txid", txidreq)
 						} else {
+							voteVal.txtask.Stop() // 主动停掉定时任务
 							s.totalEventCountTxid++
 							//TxidsMap.Delete(txidreq)
 							tarnsJavaReq := &ClientTransactionJavaReq{}
@@ -765,7 +770,7 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 
 				}
 			} else {
-				// 若消息取出来判断无法发送 则重新塞入管道中
+				// 若消息取出来判断无法发送 次数限制内 则重新塞入管道中
 				time.Sleep(1 * time.Second)
 				if cj.SendAmount <= constSendAmount {
 					time.Sleep(1 * time.Second)
@@ -877,14 +882,16 @@ func (s *server) init() {
 	ClientQuickReqChan = make(chan *ClientQuickReq, 100) // send java 消息退出管道
 	// 启动十个协成 处理接收的交易id
 	go func() {
+		serviceLog.Info("enter GoChainRequestEvent")
 		fmt.Println("enter GoChainRequestEvent")
 		s.GoChainRequestAscEvent()
 	}()
 	go func() {
+		serviceLog.Info("enter GoChainRequestCountEvent")
 		fmt.Println("enter GoChainRequestCountEvent")
 		s.GoChainRequestCountAscEvent()
 	}()
-	/*	for i := 0; i < 10; i++ {
+	/*for i := 0; i < 5; i++ {
 		fmt.Println("enter GoChainRequestCountEvent")
 		go s.GoChainRequestCountAscEvent()
 	}*/
