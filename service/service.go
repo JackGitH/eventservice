@@ -721,6 +721,7 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 				rows, err := s.dh.Db.Query(sql) //查询去重
 				if err != nil {
 					serviceLog.Error("find s.ec.Config.EventmsgtableName findIp err", err)
+					return
 				}
 				defer rows.Close()
 				if rows != nil {
@@ -766,7 +767,13 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 			} else {
 				// 若消息取出来判断无法发送 则重新塞入管道中
 				time.Sleep(1 * time.Second)
-				ClientTransactionJavaReqChan <- cj
+				if cj.SendAmount <= constSendAmount {
+					time.Sleep(1 * time.Second)
+					cj.SendAmount++
+					ClientTransactionJavaReqChan <- cj
+				} else {
+					TxidsMap.Delete(txidd) // 30次后再从缓存中删除 需要主动去查询了
+				}
 			}
 		case qk := <-ClientQuickReqChan:
 			if qk.QuickSwitch && qk.Address == address && qk.AddressCount > addressCount {
