@@ -1,0 +1,456 @@
+grep MemTotal /proc/meminfo  查看内存
+free -m       #查看内存使用
+sar 1 5   查看cpu（安装sysstate）
+top  查看cpu
+uptime        #查看系统运行时间、用户数、负载
+netstat -s    #查看系统网络统计
+ps -ef        查看进程
+who         #查看当前系统中有哪些人登录
+whoami      #查看我是谁
+w           #查看活动用户 id username #查看指定用户信息 
+last        #查看用户登录日志
+cut -d: -f 1 /etc/passwd  #查看系统所有用户
+cut -d: -f 1 /etc/group   #查看系统所有组
+crontab -l  #查看当前用户的计划任务
+
+
+tar zxvf FileName.tar.gz           解压
+tar zcvf FileName.tar.gz DirName   压缩
+
+
+tar -xvf file.tar //解压 tar包
+
+unzip FileName.zip
+zip FileName.zip DirName
+
+rar x FileName.rar
+rar a FileName.rar DirName
+
+echo $PATH   path查看
+
+cat /proc/version   查看linux版本
+cat /etc/os-release  查看centos版本
+
+csp abci-cli 10.10.144.18:/home/  服务器之间的切换
+
+
+clearn.sh
+#!/bin/bash
+echo >nohup.out
+echo >t.out
+./tendermint unsafe_reset_all
+
+
+
+abi.sh
+#!/bin/bash
+nohup ./abci-cli kvstore &
+
+netstat -anp|grep 9400 
+
+
+
+start.sh
+#!/bin/bash
+nohup ./abci-cli kvstore &
+ps -ef | grep abci-cli |grep -v grep
+sleep 2
+nohup ./tendermint node --p2p.persistent_peers=0ad0db25f5d4fed94ec181dc3690bd90d11fb5be@10.10.144.21:46656,1b71a1e4ff8f7f054a8af114ccc1c53a52b4b473@10.10.144.20:46656,289d5fabb33a8eaf036ea1c8a41002fe17b3c9ad@10.10.144.23:46656,959084a14056da1a4be05c72ec7506078e11a843@10
+.10.144.18:46656 > t.out 2>&1  &
+
+
+
+stop.sh
+ps -ef|grep tendermint | grep -v grep |awk '{print $2}' |xargs kill
+ps -ef | grep abci | grep -v grep | awk '{print $2}' | xargs kill
+
+
+etc/sudors  编辑adduser中的权限
+
+df -h  硬盘大小
+
+
+cp-r ../ghc  递归拷贝
+
+
+sz myScript-utxo.zip //  linux传到windows
+
+
+查看linux系统信息
+lscpu 查看CPU
+lsblk  查看硬盘
+df    查看硬盘使用情况
+
+tail -n 20 filename 查看最后20行
+
+ps -ef | grep startghc | grep -v grep | awk '{print $2}' | xargs kill      stop.sh的写法
+
+start.sh的写法
+		#!/bin/bash         													   
+		rm loggings/*
+		rm configFile/discovery/*
+		nohup ./startghc &
+
+		
+		
+grep "tendermint-membership" peer.log.2018-06-11_19 | more   查看更多日志
+
+grep -a "tendermint-membership" peer.log |tail -1500 |more
+
+ssh B_ip "sh /opt/m.sh" 远程执行另一台机器脚本
+
+ssh-keygen -t rsa
+scp id_rsa.pub mpsp@10.10.144.58:/home/mpsp/ghctender/
+cat id_rsa.pub >>/root/.ssh/authorized_keys
+
+
+查看防火墙状态
+
+firewall-cmd --state
+1
+停止firewall
+
+systemctl stop firewalld.service
+1
+禁止firewall开机启动
+
+systemctl disable firewalld.service 
+
+
+tc qdisc add dev enp4s0 root netem delay 100ms   //给 52 添加延时
+
+
+
+
+
+
+--------------------------------------------------------查看peer.log--start--------------------------------------
+
+
+resetBg  切换组编号 Bgadvice 发请求 bgdemand 换列表  newBgele 换的过程
+al tm
+txs num
+addV
+queue id
+* 空格
+close
+grep -i err chen.log |head
+newRoundEnd
+cat peer.log|grep "[51,60]"
+cat peer.log|grep "(bgDemand) receive bgDemand"
+cat peer.log*|grep "(bgAdvice) receive bgNum"
+
+testvotefalsevoldar
+txManagerLogger.Infof("count = 0 broadcastTo peerId:", (m.peerInfo.GetPeers())[0].PeerID)// 广播分开发
+txManagerLogger.Infof("count:", count) //广播分开发
+txManagerLogger.Infof("count != 0 broadcastTo peerId:", (m.peerInfo.GetPeers())[i].PeerID) // 广播分开发
+
+
+test.testheightchange  修改金额
+ua.TxsOut[0].Amount  修改金额
+
+
+recv batch != new  // 消息重放
+
+
+tdmMsgSign.Signature  //错误返回失败发消息（一个testsignfalse 都要设置成true）
+Verify tdmMsg err  //接收方（一个testproposerfalse 设置成true 就 ok）
+Verify fail but continue //接收方
+
+
+1. 更换共识组
+grep -i "(newBgEle)" peer.log
+2. 重置共识组
+grep -i "(resetBg)" peer.log
+3. 请求更换共识组消息
+grep -i "(bgAdvice)" peer.log
+4. 请求更换共识组列表消息
+grep -i "(bgDemand)" peer.log
+5. 共识各个阶段
+tail -f peer.log |grep chainmgr|grep enter
+commit 块
+(commit blk)
+tail -f peer.log|grep chainmgr|grep '(commit blk)'
+grep proposer peer.log |grep chainmgr|head
+6. 投票
+tail -f peer.log|grep membership |grep addVer
+7. 查看选主
+tail -f peer.log|grep membership|grep -i 'our turn'
+8. 检测交易
+tail -f peer.log|grep '(check txs)'
+9. 查询共识共识组参数bgInfo， 查询配置超时参数 tdm conf
+grep bgInfo peer.log|grep coupon
+10. 计票 addVeri
+grep coupon peer.log |grep addVeri
+11 同步 grep '(sync blk)' peer.log
+12 块里交易数量 grep 'txs num' peer.log
+grep 'txs length' peer.log
+13 查询队列 tail -f peer.log| grep "queue id" 
+
+
+
+网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms 
+取消延迟: sudo tc qdisc del dev  enp4s0  root  netem
+网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms 
+取消延迟: sudo tc qdisc del dev  enp5s1f0  root  netem
+
+
+网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms 
+取消延迟: sudo tc qdisc del dev  enp4s0  root  netem
+网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms 
+取消延迟: sudo tc qdisc del dev  enp5s1f0  root  netem
+
+网络限速：sudo tc qdisc add dev enp4s0 root tbf rate 2048kbit latency 50ms burst 2048
+取消限速：sudo tc qdisc del dev enp4s0 root
+
+网络包损坏：sudo tc  qdisc  add  dev  enp4s0  root  netem  corrupt  10%
+取消包损坏：sudo tc  qdisc  del  dev  enp4s0  root  netem  
+
+ ----------------------------------------end------------------------------------------------------------
+ 
+
+
+
+
+
+
+
+
+:set hls 高亮
+
+/关键词
+ctrl + o
+一：跳到文件第一行
+1：输入:0或:1，然后回车；
+2：在键盘按下小写gg；
+二：跳到文件最后一行
+1：输入:$，然后回车；
+2：在键盘按下大写G ；
+3：在键盘按Shift + g；
+[root@www ~]# grep [-acinv] [--color=auto] '搜寻字符串' filename
+选项与参数：
+-a ：将 binary 文件以 text 文件的方式搜寻数据
+-c ：计算找到 '搜寻字符串' 的次数
+-i ：忽略大小写的不同，所以大小写视为相同
+-n ：顺便输出行号
+-v ：反向选择，亦即显示出没有 '搜寻字符串' 内容的那一行！
+--color=auto ：可以将找到的关键词部分加上颜色的显示喔！
+du -a    du -h   查看大小
+df -h 查看硬盘使用
+#!/bin/bash--posix 和 #!/bin/sh  效果是一样的 
+
+ssh-keygen -t rsa
+ssh-copy-id 10.10.144.10
+
+配置go env
+vi /etc/profile
+export PATH=$PATH:/usr/lib/go/bin
+export GOPATH=/home/mpsp/ghctender
+export GOROOT=/home/mpsp/ghctender/go
+source /etc/profile
+
+export GOPATH=/home/mpsp/ghctender
+System Info
+
+
+which  go  查找配置文件中的PATH路径
+find / -name go   
+
+ed -n ‘/1-09 15:00:00/,/1-09 16:30:31/’p catalina.log > catalina.2017-01-09.log  截取日志
+
+cat peer.log* | grep -a "uChains-M" | awk -F "," '{print $1" "$3}' | awk -F " " 'BEGIN{temp=""} {if ( substr($0,1,12)!=temp ){temp=substr($0,1,12);myarr[temp]=$9} else{myarr[temp]+=$9}} END {for (key in myarr) {print key","myarr[key]}}' | sort         统计TPS 的 脚本 改了一下 
+
+cat  peer.log|grep -a "\-> queue("
+
+
+---------------------------------------------------脚本--------------------------
+export GOPATH=/home/mpsp/ghctender
+select count(1) from events_msg
+show full processlist 
+
+BASE=/home/mpsp/ghctender/src/uchains
+TARGET=/home/mpsp/ghctender/src/target
+
+cd $BASE/peer
+echo "START"
+echo "build application"
+go build start.go
+if [ $? == 0 ];then
+   echo "  *  BUILD SUCCESS!"
+   echo "  *  MOVE APP TO [ $TARGET ]"
+   mv start $TARGET/startghc
+else
+   echo "  *  BUILD FAIL!"
+   exit 1
+fi
+
+cd $BASE/externalApp/assetUtxo/
+echo ""
+echo ""
+echo "build so"
+#go build -buildmode=plugin -o 8.so *.go
+go build -ldflags "-pluginpath=coupon_1-0-0" -buildmode=plugin -o coupon_1-0-0.so *.go
+if [ $? == 0 ];then
+   echo "  *  BUILD SUCCESS!"
+   echo "  *  MOVE SO TO [ $TARGET ]"
+   mv coupon_1-0-0.so $TARGET/
+else
+   echo "  *  BUILD FAIL!"
+fi
+
+echo "END"
+
+-----------------------------------------------脚本---------------------------------------
+
+/var/lib/jenkins/workspace/jenkinsScript/dockerSpace/uchains   jekins编译到的地址
+
+ansibleServer:
+  120.92.36.160 8080
+120.92.36.160   ubuntu    UMFroot~!@
+
+uchains :
+120.92.102.222  ubuntu    UMFroot~!@
+120.92.115.36   ubuntu    UMFroot~!@
+120.92.117.29   ubuntu    inspection~!@
+
+node1：120.92.117.29 7451    
+node2：120.92.102.222 7451    
+node3：120.92.115.36 7451   
+node4：120.92.115.36 17451
+	
+	
+deploy_dir = /data/project/ansible-deploy/uchains/deploy
+data_dir = /data/project/ansible-deploy/uchains/deploy
+
+
+priKeyServer:
+  ip: 120.92.102.222
+  port: 7153
+  
+priKeyServerDB:
+120.92.102.222 13306
+username: root
+password: UMF@test
+
+java 服务 
+ 120.92.115.36 :8010
+ 访问地址：http://uptc.umpay.com/uchains/
+ 
+浏览器数据库：
+url: jdbc:mysql://120.92.36.160:3333/admin-prod
+username: root
+password: UMF@test
+
+ZABBIX 服务
+http://120.92.115.36/zabbix/index.php
+uchains  123456
+
+测试 TIKV 路径
+ 13 镜像位置 ：cd /var/lib/jenkins/workspace/jenkinsScript/dockerSpace/uchains
+/data/testTikv/uchains
+
+TIKV 服务
+
+
+日志 路径 ：
+uchains 日志   cd /data/project/ansible-deploy/uchains/deploy/node-1/log 
+java 日志   cd  /data/uchains-admin/log
+私钥服务器日志 : cd /home/ubuntu/nieshengfu
+中控 ： cd /home/ubuntu/project/src/uchains-ansible 
+
+网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms 
+取消延迟: sudo tc qdisc del dev  enp4s0  root  netem
+网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms 
+取消延迟: sudo tc qdisc del dev  enp5s1f0  root  netem
+
+网络限速：sudo tc qdisc add dev enp4s0 root tbf rate 2048kbit latency 50ms burst 2048
+取消限速：sudo tc qdisc del dev enp4s0 root
+
+网络包损坏：sudo tc  qdisc  add  dev  enp4s0  root  netem  corrupt  10%
+取消包损坏：sudo tc  qdisc  del  dev  enp4s0  root  netem  
+sudo tc  qdisc  del  dev  enp5s1f0  root  netem  
+
+网络包损坏：sudo tc  qdisc  add  dev  enp5s1f0  root  netem  corrupt  10%
+
+交易脚本 位置 ：cd /home/mpsp/goworkspace/src/uchains/script/Coupon_yace/coupon/YaCe2 
+SDK 位置：cd /home/mpsp/goworkspace/src/uchains/script/testgosdk/test
+抓包：sudo ngrep -W byline -d enp11s0f0  port 7451 
+负载均衡日志：cat uchains.log | grep  -E "loadbalance select server|SDK begin request|loadbalance worked,select server"
+超时重试日志：tail  -f  uchains.log* | grep -v "Timer-0" | grep -E "retry" -3
+查看合约升级的日志 cat peer.log | grep "H-\[InitApp\]"
+修改配置日志：tail -f  peer.log | grep "Close batch"
+
+            // 中控平台
+http://10.10.144.54/private/vnc_only.php
+USERID
+PASSW0RD
+
+
+
+sudo fdisk -l   磁盘信息
+free  内存
+top    1  cpu信息
+
+ps -ef|grep tendermint | grep -v grep |awk '{print $2}' |xargs kill
+
+curl -s 'localhost:46657/broadcast_tx_commit?tx="abcd"'
+
+curl -s 'localhost:46657/abci_query?data="abcd"'
+
+
+--------------------------------------------------------------------------------
+genesis.rst--举例了 json的 demo
+
+state.go(MakeGenesisState)---replay_file.go---genesis.go----genesis.json
+
+
+ --home ./node
+
+
+
+./tendermint node --p2p.persistent_peers=0ad0db25f5d4fed94ec181dc3690bd90d11fb5be@10.10.144.21:46656,9bafcc4523b6d0986aefee783f61845e99ca5eb1@10.10.144.20:46656,289d5fabb33a8eaf036ea1c8a41002fe17b3c9ad@10.10.144.23:46656,959084a14056da1a4be05c72ec7506078e11a843@10.10.144.18:46656
+
+
+
+nohup ./tendermint node --p2p.persistent_peers=10.10.144.21:46656,10.10.144.20:46656,10.10.144.23:46656,10.10.144.18:46656 > t.out 2>&1  &
+
+./tendermint node --p2p.persistent_peers="3a558bd6f8c97453aa6c2372bb800e8b6ed8e6db@10.10.144.21:46656:46656,ccf30d873fddda10a495f42687c8f33472a6569f@IP2:46656,9a4c3de5d6788a76c6ee3cd9ff41e3b45b4cfd14@IP3:46656,58e6f2ab297b3ceae107ba4c8c2898da5c009ff4@IP4:46656"
+
+
+
+
+curl -s 'localhost:46657/broadcast_tx_commit?tx="abcd"'
+
+curl -s 'localhost:46657/abci_query?data="abcd"'
+
+
+
+
+ps -ef|grep tendermint | grep -v grep |awk '{print $2}' |xargs kill
+
+
+ps -ef | grep abci | grep -v grep | awk '{print $2}' | xargs kill
+
+
+protoc --plugin=protoc-gen-go=C:\Go\bin\protoc-gen-go.exe --go_out=plugins=grpc:. --proto_path=. helloworld.proto
+
+protoc --java_out=./ helloworld.proto
+protoc --plugin=protoc-gen-grpc-java=C:\Go\bin\protoc-gen-grpc-java-1.2.0-windows-x86_64.exe --grpc-java_out=plugins=grpc:. --proto_path=./ helloworld.proto
+
+
+
+uChains-M
+
+
+
+
+
+
+
+
+
+
+
+
+
+   
