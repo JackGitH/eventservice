@@ -474,12 +474,15 @@ var Switcha bool
 
 func Init() {
 	Switcha = true
+	t := time.Now()
+	tim := t.String()[0:10] + "_" + t.String()[11:13]
+	//tim := t.String()[0:10] + "_" + t.String()[11:13] + t.String()[14:16]
 	for {
-		t := time.Now()
-		tim := t.String()[0:10] + "_" + t.String()[11:13]
-		time.Sleep(1 * time.Second)
+
+		time.Sleep(2 * time.Second)
 		t1 := time.Now()
-		tim1 := t1.String()[0:10] + "_" + t.String()[11:13]
+		//tim1 := t1.String()[0:10] + "_" + t1.String()[11:13] + t1.String()[14:16]
+		tim1 := t1.String()[0:10] + "_" + t1.String()[11:13]
 
 		if tim != tim1 || Switcha {
 			//logFile := "eventserver.log." + tim[0:10] + "_" + tim[11:13]
@@ -488,15 +491,17 @@ func Init() {
 				logFile = "eventserver.log"
 			}
 			Switcha = false
-
+			tim = tim1
 			format := logging.MustStringFormatter(
 				"%{color}%{time:20060102150405.000} [%{module}] %{shortfunc} -> %{level:.4s} %{id:03x}%{color:reset} %{message}",
 			)
 			logFileDir := "loggings"
 			Mkdirlog(logFileDir)
 			//logFile := "eventserver.log"
-
-			logs := logFileDir + "/" + logFile
+			//sys := string(runtime.GOOS) // 判断操作系统
+			var logs string
+			//if sys == "windows" {
+			logs = logFileDir + "/" + logFile
 
 			logIo, err := os.OpenFile(logs, os.O_CREATE|os.O_WRONLY, 0777)
 			if err != nil {

@@ -32,7 +32,7 @@ func (p Password) Redacted() interface{} {
 }
 
 const (
-	code1000 = "1000"
+	code1000 = "0000"
 	code1001 = "1001"
 	code1002 = "1002"
 	code1003 = "1003"
@@ -55,8 +55,9 @@ const (
 	msgRegist03 = "注册失败"
 	msgRegist04 = "交易异常"
 
-	constAmount     = 1 / 3 // 1/3容错
-	constSendAmount = 100   // 发送30次失败则不再发送
+	constAmount      = 1 / 3 // 1/3容错
+	constSendAmount  = 100   // 发送30次失败则不再发送
+	constRetryAmount = 10
 )
 
 //server核心
@@ -65,7 +66,6 @@ type server struct {
 	dh                  *db.DbHandler
 	addressIdMap        map[string]string
 	updateIspushedChan  chan *UpdateIspushedsql
-	switchButton        bool
 	totalEventTxid      int32
 	totalEventCountTxid int32
 }
@@ -94,8 +94,15 @@ type GoChainRequestReqAsc struct {
 // 缓存交易情况的map
 var TxidsMap *sync.Map
 
+// 缓存注册 channel的map
+
+var TchannelMap *sync.Map
+
 // 缓存send java消息的stream 判断是不是重启java客户端 造成stream重复
 var StreamMap *sync.Map
+
+// 为每一个sendmsg的协成 保存一个关闭通道
+var QuickChanMap *sync.Map
 
 // 缓存交易情况的map 中的value
 type VoteAccount struct {
@@ -118,18 +125,20 @@ var AddressCount int
 
 //
 type ClientTransactionJavaReq struct {
-	TxId       string
-	Ecode      string
-	Emessage   string
-	ChainId    string
-	Address    string
-	SendAmount int32
+	TxId              string
+	Ecode             string
+	Emessage          string
+	ChainId           string
+	Address           string
+	SendAmount        int32
+	DistinguishAmount int32
 }
 
 type ClientQuickReq struct {
 	QuickSwitch  bool
 	Address      string
 	AddressCount int
+	AddressMark  int64
 }
 
 //sdk请求txid 获得交易结果
@@ -201,8 +210,6 @@ func (s *server) GoClientRegistEvent(ctx context.Context, request *sv.ClientRegi
 	Md5Inst.Write([]byte(ipPort))
 	id := Md5Inst.Sum([]byte(""))
 	idStr := hex.EncodeToString(id)
-	// 缓存ip 对应地址 推送消息时使用
-	AddressMap.Store(idStr, ip)
 
 	if acount == 0 {
 
@@ -230,9 +237,21 @@ func (s *server) GoClientRegistEvent(ctx context.Context, request *sv.ClientRegi
 			/*ph.DataCacheMap.Delete(sc.DataHash)*/
 			serviceLog.Errorf("write db err:%s", err.Error())
 		}
+		// 缓存ip 对应地址 推送消息时使用
+		AddressMap.Store(idStr, ip)
 		s.addressIdMap[idStr] = ipPort //放在缓存中
+		tchan := make(chan *ClientTransactionJavaReq, 1000000)
+		_, ok := TchannelMap.Load(ip)
+		if !ok {
+			TchannelMap.Store(ip, tchan)
+		}
 		return &sv.ClientRegisterAddressRes{MessageRes: msgRegist02, IsSuccess: true, MessageIDRes: idStr}, nil
 	} else {
+		tchan := make(chan *ClientTransactionJavaReq, 1000000)
+		_, ok := TchannelMap.Load(ip)
+		if !ok {
+			TchannelMap.Store(ip, tchan)
+		}
 		return &sv.ClientRegisterAddressRes{MessageRes: msgRegist01, IsSuccess: false, MessageIDRes: idStr}, nil
 	}
 
@@ -253,8 +272,29 @@ func (s *server) GoClientRequestEvent(ctx context.Context, request *sv.ClientTra
 	cap, ok := s.addressIdMap[addressId] //先判断是否注册
 	serviceLog.Info("GoClientRequestEvent s.addressIdMap", s.addressIdMap)
 	if !ok {
-		serviceLog.Info("addressId Non-existent cap:", cap, "addressId Non-existent", addressId)
-		return &sv.ClientTransactionRes{TxIdRes: txid, CodeRes: code1005, MessageRes: msg1005, TimeRes: "", ChainIdRes: ""}, nil
+		var ipstr string
+		sql1 := fmt.Sprintf("select %s from %s where %s = '%s' ",
+			ECLIENTIP, s.ec.Config.RegisterTableName, ID, addressId)
+		rows, err := s.dh.Db.Query(sql1) //查询去重
+		if err != nil {
+			serviceLog.Error("GoClientRequestEvent err", err)
+			return &sv.ClientTransactionRes{TxIdRes: txid, CodeRes: code1004, MessageRes: msg1004, TimeRes: "", ChainIdRes: ""}, err
+		}
+		defer rows.Close()
+		if rows != nil {
+			for rows.Next() {
+				err = rows.Scan(&ipstr)
+				if err != nil {
+					fmt.Println("GoClientRequestEvent err", err)
+					serviceLog.Error("GoClientRequestEvent err", err)
+					return &sv.ClientTransactionRes{TxIdRes: txid, CodeRes: code1004, MessageRes: msg1004, TimeRes: "", ChainIdRes: ""}, err
+				}
+			}
+		}
+		if ipstr == "" {
+			serviceLog.Info("addressId Non-existent cap:", cap, "addressId Non-existent", addressId)
+			return &sv.ClientTransactionRes{TxIdRes: txid, CodeRes: code1005, MessageRes: msg1005, TimeRes: "", ChainIdRes: ""}, nil
+		}
 	}
 
 	sql := fmt.Sprintf("select %s,%s,%s,%s,%s from %s where %s = '%s' and %s ='%s'",
@@ -275,13 +315,13 @@ func (s *server) GoClientRequestEvent(ctx context.Context, request *sv.ClientTra
 			var emessager string
 			var etimer string
 			var chainIdr string
-			serviceLog.Info("txidr:", txidr, "---ecoder:", ecoder, "---emessager:", emessager, "---etimer:", etimer, "---chainIdr:", chainIdr)
 			err = rows.Scan(&txidr, &ecoder, &emessager, &etimer, &chainIdr)
 			if err != nil {
 				fmt.Println("GoClientRequestEvent err", err)
 				serviceLog.Error("GoClientRequestEvent err", err)
 				return &sv.ClientTransactionRes{TxIdRes: txid, CodeRes: code1004, MessageRes: msg1004, TimeRes: "", ChainIdRes: ""}, err
 			}
+			serviceLog.Info("txidr:", txidr, "---ecoder:", ecoder, "---emessager:", emessager, "---etimer:", etimer, "---chainIdr:", chainIdr)
 			return &sv.ClientTransactionRes{TxIdRes: txidr, CodeRes: ecoder, MessageRes: emessager, TimeRes: etimer, ChainIdRes: chainIdr}, err
 		}
 
@@ -573,24 +613,29 @@ func (s *server) GoChainRequestCountAscEvent() error {
 					serviceLog.Info("voteVal.totalNodes", voteVal.totalNodes)
 					fail := voteAmount >= totalNods
 					if fail {
-						code = codereq //todo 这里的失败原因使用的uchains返回的
-						msg = messreq  //
-						sqlFinal := fmt.Sprintf("update %s set %s = '%s' ,%s = '%s' where %s = '%s'",
-							s.ec.Config.EventmsgtableName, ECODE, code, EMESSAGE, msg, TXID, txidreq)
-						serviceLog.Info("GoChainRequestCountEvent sqlFinal", sqlFinal)
-						_, err := s.dh.Db.Exec(sqlFinal)
-						if err != nil {
-							serviceLog.Error("GoChainRequestCountEvent db set ecode fail txid", txidreq)
-						} else {
-							voteVal.txtask.Stop() // 主动停掉定时任务
-							s.totalEventCountTxid++
-							//TxidsMap.Delete(txidreq)
-							tarnsJavaReq := &ClientTransactionJavaReq{}
-							tarnsJavaReq.TxId = txidreq
-							tarnsJavaReq.ChainId = voteVal.chainId
-							tarnsJavaReq.Ecode = code
-							tarnsJavaReq.Emessage = msg
-							ClientTransactionJavaReqChan <- tarnsJavaReq
+						// 只要满足记账要求就发送
+						if !voteVal.isUpdate {
+							// 避免两票/三票重复发
+							voteVal.isUpdate = true
+							code = codereq                //todo 这里的失败原因使用的uchains返回的
+							msg = msg1002 + ":" + messreq //
+							sqlFinal := fmt.Sprintf("update %s set %s = '%s' ,%s = '%s' where %s = '%s'",
+								s.ec.Config.EventmsgtableName, ECODE, code, EMESSAGE, msg, TXID, txidreq)
+							serviceLog.Info("GoChainRequestCountEvent sqlFinal", sqlFinal)
+							_, err := s.dh.Db.Exec(sqlFinal)
+							if err != nil {
+								serviceLog.Error("GoChainRequestCountEvent db set ecode fail txid", txidreq)
+							} else {
+								voteVal.txtask.Stop() // 主动停掉定时任务
+								s.totalEventCountTxid++
+								//TxidsMap.Delete(txidreq)
+								tarnsJavaReq := &ClientTransactionJavaReq{}
+								tarnsJavaReq.TxId = txidreq
+								tarnsJavaReq.ChainId = voteVal.chainId
+								tarnsJavaReq.Ecode = code
+								tarnsJavaReq.Emessage = msg
+								ClientTransactionJavaReqChan <- tarnsJavaReq
+							}
 						}
 
 					}
@@ -610,17 +655,17 @@ func (s *server) GoChainRequestCountAscEvent() error {
 * @version V1.0
  */
 func (s *server) GoJavaRequestEvent(stream sv.GoEventService_GoJavaRequestEventServer) error {
+	/*serviceLog = logging.MustGetLogger("service")*/
 	serviceLog.Info("Server GoJavaRequestEvent enter")
 	var address string
-	s.switchButton = false
 	req, err := stream.Recv()
 	if err == io.EOF {
 		fmt.Println("read done")
 		return nil
 	}
 	if err != nil {
-		fmt.Println("Server GoJavaRequestEvent Stream ERR", err)
-		serviceLog.Error("Server Stream recv err", err)
+		fmt.Println("Server GoJavaRequestEvent start receive Stream ERR", err)
+		serviceLog.Error("Server Stream recv start receive err", err)
 		return err
 	}
 	if req != nil {
@@ -628,33 +673,38 @@ func (s *server) GoJavaRequestEvent(stream sv.GoEventService_GoJavaRequestEventS
 		address = req.TxIdRes
 	}
 	address = req.TxIdRes
+
 	value, ok := StreamMap.Load(address)
+	timein := time.Now().UnixNano()
 	if ok {
 		serviceLog.Info("shut down channel  address", value)
+		quichchan := value.(chan *ClientQuickReq)
 		cq := &ClientQuickReq{}
 		cq.QuickSwitch = true
 		cq.Address = address
-		AddressCount = AddressCount + 1
-		cq.AddressCount = AddressCount
-		ClientQuickReqChan <- cq
+		cq.AddressMark = timein
+		quichchan <- cq
+	} else {
+		quichchan := make(chan *ClientQuickReq, 10)
+		StreamMap.Store(address, quichchan)
 	}
-	StreamMap.Store(address, address)
+	time.Sleep(1 * time.Second)
+	go func() {
+		//time.Sleep(20)
+		s.SendToJavaMsg(stream, address, AddressCount, timein)
+
+	}()
 
 	for {
-		if !s.switchButton {
-			go func() {
-				//time.Sleep(20)
-				s.SendToJavaMsg(stream, address, AddressCount)
-			}()
-		}
+
 		req, err = stream.Recv()
 		if err == io.EOF {
 			fmt.Println("read done")
 			return nil
 		}
 		if err != nil {
-			fmt.Println("Server GoJavaRequestEvent Stream ERR", err)
-			serviceLog.Error("Server Stream recv err", err)
+			fmt.Println("Server GoJavaRequestEvent arround receive  Stream ERR", err)
+			serviceLog.Error("Server Stream recv arround receive err", err)
 			return err
 		}
 
@@ -664,57 +714,22 @@ func (s *server) GoJavaRequestEvent(stream sv.GoEventService_GoJavaRequestEventS
 
 /**
 * @Title: service.go
-* @Description: SendToJavaMsg  uchains 交易成功 推送消息到java服务器
+* @Description: DistinguishChan  处理通知慢的问题
 * @author ghc
-* @date 9/29/18 10:47 AM
+* @date 10/21/18 21:46 PM
 * @version V1.0
  */
-func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer, address string, addressCount int) {
-	var ipr string
-	s.switchButton = true
-	var voteValAddress string
-	// 注册时的IP 地址 对应返回的address
-	ip, ok := AddressMap.Load(address)
-	//fmt.Println("SendToJavaMsg ip", ip)
-	//缓存不存在 去数据库中查
-	if ip == "" || !ok {
-		sql := fmt.Sprintf("select %s  from %s where %s = '%s'",
-			ECLIENTIP, s.ec.Config.RegisterTableName, ID, address)
-		serviceLog.Info("findRepeat sql", sql)
-
-		rows, err := s.dh.Db.Query(sql) //查询去重
-		if err != nil {
-			serviceLog.Error("SendToJavaMsg findIp err", err)
-		}
-		defer rows.Close()
-		if rows != nil {
-			for rows.Next() {
-				err = rows.Scan(&ip)
-				if err != nil {
-					serviceLog.Error("SendToJavaMsg findIp rows err", err)
-				}
-			}
-		}
-	}
-
-	/*	fmt.Println("SendToJavaMsg has send")
-		for i := 0; i < 10; i++ {
-			err := stream.Send(&sv.ClientTransactionJavaReq{"11356456", "1001", "发送成功", "coupon"})
-			if err != nil {
-				serviceLog.Error("11356456"+":Server Stream send fail erro", err)
-				return err
-			}
-		}
-		return nil*/
-
+func (s *server) DistinguishChan() {
+	serviceLog.Info("enter DistinguishChan")
 	for {
 		select {
 		//tx 成功或失败  推送消息
 		case cj := <-ClientTransactionJavaReqChan:
 			//fmt.Println("GoJavaRequestEvent hash receive txid:", cj.TxId, cj.Emessage) //todo 如果不注释掉 发送不成功的会一直刷日志
-			serviceLog.Info("GoJavaRequestEvent hash receive txid:", cj.TxId, cj.Emessage)
+			serviceLog.Info("DistinguishChan hash receive txid:", cj.TxId, cj.Emessage)
 			txidd := cj.TxId
 			// 从交易缓存中获取txid 对应的 IP
+			var ipr string
 
 			val, ok := TxidsMap.Load(txidd)
 
@@ -733,62 +748,131 @@ func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer
 					for rows.Next() {
 						err = rows.Scan(&ipr)
 						if err != nil {
-							serviceLog.Error("SendToJavaMsg findIp rows err", err)
+							serviceLog.Error("DistinguishChan findIp rows err", err)
 						} // 没必要查出来继续放进缓存中 因为接下来处理完会马上删掉
 					}
 				}
 
 			} else {
 				voteVal := val.(VoteAccount)
-				voteValAddress = voteVal.address
-				serviceLog.Info("txid", cj.TxId, "voteValAddress", voteValAddress, "ip", ip, "ipr", ipr)
+				ipr = voteVal.address
 			}
-
-			if voteValAddress == ip || ipr == ip {
-				err := stream.Send(&sv.ClientTransactionJavaReq{cj.TxId, cj.Ecode, cj.Emessage, cj.ChainId})
-				if err != nil {
-					serviceLog.Error(cj.TxId+":Server Stream send fail erro", err)
-					// 出错代表没发送成功 重试次数30次 继续塞入管道
-					if cj.SendAmount <= constSendAmount {
-						time.Sleep(1 * time.Second)
-						cj.SendAmount++
-						ClientTransactionJavaReqChan <- cj
-					} else {
-						TxidsMap.Delete(txidd) // 30次后再从缓存中删除 需要主动去查询了
-					}
-					//return err
-				} else {
-					TxidsMap.Delete(txidd) // 发送成功再从缓存中删除
-					serviceLog.Info("GoJavaRequestEvent send txid success:", cj.TxId)
-					sqlFinal := fmt.Sprintf("update %s set %s = '%d'  where %s = '%s'",
-						s.ec.Config.EventmsgtableName, ISPUSHED, 1, TXID, cj.TxId)
-					serviceLog.Info("update ispushed sqlFinal", sqlFinal)
-					usql := &UpdateIspushedsql{}
-					usql.sql = sqlFinal
-					//异步处理sqlupdate ispushed
-					s.updateIspushedChan <- usql
-
-				}
+			tchan, ok := TchannelMap.Load(ipr)
+			if ok {
+				serviceLog.Info("tcha hash send txid", txidd, "ipr", ipr)
+				tcha := tchan.(chan *ClientTransactionJavaReq)
+				tcha <- cj
 			} else {
-				// 若消息取出来判断无法发送 次数限制内 则重新塞入管道中
-				time.Sleep(1 * time.Second)
-				if cj.SendAmount <= constSendAmount {
+				if cj.DistinguishAmount <= constSendAmount {
+					cj.DistinguishAmount++
 					time.Sleep(1 * time.Second)
-					cj.SendAmount++
 					ClientTransactionJavaReqChan <- cj
-				} else {
-					TxidsMap.Delete(txidd) // 30次后再从缓存中删除 需要主动去查询了
 				}
 			}
-		case qk := <-ClientQuickReqChan:
-			if qk.QuickSwitch && qk.Address == address && qk.AddressCount > addressCount {
-				// 退出
-				return
-			}
-
 		}
 	}
+}
 
+/**
+* @Title: service.go
+* @Description: SendToJavaMsg  uchains 交易成功 推送消息到java服务器
+* @author ghc
+* @date 9/29/18 10:47 AM
+* @version V1.0
+ */
+func (s *server) SendToJavaMsg(stream sv.GoEventService_GoJavaRequestEventServer, address string, addressCount int, tiin int64) {
+	// 注册时的IP 地址 对应返回的address
+	ip, ok := AddressMap.Load(address)
+	var ipstr string
+	if ok {
+		if ip != nil {
+			ipstr = ip.(string)
+		}
+	} else {
+		//fmt.Println("SendToJavaMsg ip", ip)
+		//缓存不存在 去数据库中查
+
+		sql := fmt.Sprintf("select %s  from %s where %s = '%s'",
+			ECLIENTIP, s.ec.Config.RegisterTableName, ID, address)
+		serviceLog.Info("findRepeat sql", sql)
+
+		rows, err := s.dh.Db.Query(sql) //查询去重
+		if err != nil {
+			serviceLog.Error("SendToJavaMsg findIp err", err)
+		}
+		defer rows.Close()
+		if rows != nil {
+			for rows.Next() {
+				err = rows.Scan(&ipstr)
+				if err != nil {
+					serviceLog.Error("SendToJavaMsg findIp rows err", err)
+				}
+			}
+		}
+
+	}
+	serviceLog.Info("ipstr ip", ipstr, ip)
+	tchan, ok := TchannelMap.Load(ipstr)
+
+	value, oks := StreamMap.Load(address)
+	if oks {
+		serviceLog.Info("enter oks address", address)
+		quichchan := value.(chan *ClientQuickReq)
+		if ok {
+			tcha := tchan.(chan *ClientTransactionJavaReq)
+			for {
+				select {
+				//tx 成功或失败  推送消息
+				case cj := <-tcha:
+					err := stream.Send(&sv.ClientTransactionJavaReq{cj.TxId, cj.Ecode, cj.Emessage, cj.ChainId})
+					if err != nil {
+						serviceLog.Error(cj.TxId+":Server Stream send fail erro", err)
+						// 出错代表没发送成功 重试次数10次 继续塞入管道
+						/*if cj.SendAmount <= constRetryAmount {
+							time.Sleep(1 * time.Second)
+							cj.SendAmount++
+							tcha <- cj
+						} else {*/
+						TxidsMap.Delete(cj.TxId) // 30次后再从缓存中删除 需要主动去查询了
+						return
+						//return err
+					} else {
+						TxidsMap.Delete(cj.TxId) // 发送成功再从缓存中删除
+						serviceLog.Info("GoJavaRequestEvent send txid success:", cj.TxId)
+						sqlFinal := fmt.Sprintf("update %s set %s = '%d'  where %s = '%s'",
+							s.ec.Config.EventmsgtableName, ISPUSHED, 1, TXID, cj.TxId)
+						serviceLog.Info("update ispushed sqlFinal", sqlFinal)
+						usql := &UpdateIspushedsql{}
+						usql.sql = sqlFinal
+						//异步处理sqlupdate ispushed
+						s.updateIspushedChan <- usql
+					}
+				case qk := <-quichchan:
+					serviceLog.Info("Address will stop", qk.Address, "--", qk.AddressMark)
+					if qk.AddressMark > tiin {
+						serviceLog.Info("Address hash stop", qk.Address, "--", qk.AddressMark)
+						// 退出
+						return
+					} else {
+						if qk.AddressCount < constRetryAmount {
+							qk.AddressCount++
+							time.Sleep(1 * time.Second)
+							quichchan <- qk
+						} else {
+							serviceLog.Info("quick hash been release ", qk.Address, "--", qk.AddressMark)
+						}
+
+					}
+
+				}
+			}
+
+		} else {
+			serviceLog.Info("ok is nil", address)
+		}
+	} else {
+		serviceLog.Warning("oks is nil", address)
+	}
 }
 
 /**
@@ -849,6 +933,29 @@ func TaskEvent(txid string, s *server) {
 	return nil, nil
 }*/
 
+// 预加载数据库address ip数据到缓存中。 防止断线重连找不到缓存数据
+func (s *server) loadDbData() {
+	var ip string
+	tchan := make(chan *ClientTransactionJavaReq, 1000000)
+	sql := fmt.Sprintf("select ECLIENTIP from %s ", s.ec.Config.RegisterTableName)
+	rows, err := s.dh.Db.Query(sql)
+	if err != nil {
+		serviceLog.Error("loadDbData err", err)
+		return
+	}
+	if rows != nil {
+		for rows.Next() {
+			err = rows.Scan(&ip)
+			if err != nil {
+				serviceLog.Error("SendToJavaMsg findIp rows err", err)
+				return
+			} else {
+				TchannelMap.Store(ip, tchan)
+			}
+		}
+	}
+}
+
 /**
 * @Title: service.go
 * @Description:  server struct init
@@ -872,6 +979,7 @@ func (s *server) init() {
 	}
 	s.ec = evcf
 	s.addressIdMap = make(map[string]string)
+	TchannelMap = &sync.Map{}
 	TxidsMap = &sync.Map{}
 	StreamMap = &sync.Map{}                                                      //初始化缓存Ip地址map
 	AddressMap = &sync.Map{}                                                     //缓存消息票数的队列
@@ -891,7 +999,11 @@ func (s *server) init() {
 		fmt.Println("enter GoChainRequestCountEvent")
 		s.GoChainRequestCountAscEvent()
 	}()
-	/*for i := 0; i < 5; i++ {
+	go func() {
+		s.DistinguishChan()
+	}()
+	/*for i := 0; i < 2; i++ {
+	    runtime.GOMAXPROCS(2)
 		fmt.Println("enter GoChainRequestCountEvent")
 		go s.GoChainRequestCountAscEvent()
 	}*/
@@ -968,6 +1080,8 @@ func (s *server) createTable() {
 	}
 	fmt.Println("createTable success")
 	serviceLog.Info("createTable success")
+	// 初始化缓存ip channel
+	s.loadDbData()
 	// 启动协成监听mysql push更新
 	for i := 0; i < 10; i++ {
 		go s.updateIspushed()
