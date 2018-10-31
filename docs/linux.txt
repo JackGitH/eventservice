@@ -7,7 +7,7 @@ netstat -s    #查看系统网络统计
 ps -ef        查看进程
 who         #查看当前系统中有哪些人登录
 whoami      #查看我是谁
-w           #查看活动用户 id username #查看指定用户信息 
+w           #查看活动用户 id username #查看指定用户信息
 last        #查看用户登录日志
 cut -d: -f 1 /etc/passwd  #查看系统所有用户
 cut -d: -f 1 /etc/group   #查看系统所有组
@@ -46,7 +46,7 @@ abi.sh
 #!/bin/bash
 nohup ./abci-cli kvstore &
 
-netstat -anp|grep 9400 
+netstat -anp|grep 9400
 
 
 
@@ -86,13 +86,13 @@ tail -n 20 filename 查看最后20行
 ps -ef | grep startghc | grep -v grep | awk '{print $2}' | xargs kill      stop.sh的写法
 
 start.sh的写法
-		#!/bin/bash         													   
+		#!/bin/bash
 		rm loggings/*
 		rm configFile/discovery/*
 		nohup ./startghc &
 
-		
-		
+
+
 grep "tendermint-membership" peer.log.2018-06-11_19 | more   查看更多日志
 
 grep -a "tendermint-membership" peer.log |tail -1500 |more
@@ -114,7 +114,7 @@ systemctl stop firewalld.service
 1
 禁止firewall开机启动
 
-systemctl disable firewalld.service 
+systemctl disable firewalld.service
 
 
 tc qdisc add dev enp4s0 root netem delay 100ms   //给 52 添加延时
@@ -185,29 +185,29 @@ grep coupon peer.log |grep addVeri
 11 同步 grep '(sync blk)' peer.log
 12 块里交易数量 grep 'txs num' peer.log
 grep 'txs length' peer.log
-13 查询队列 tail -f peer.log| grep "queue id" 
+13 查询队列 tail -f peer.log| grep "queue id"
 
 
 
-网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms 
+网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms
 取消延迟: sudo tc qdisc del dev  enp4s0  root  netem
-网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms 
+网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms
 取消延迟: sudo tc qdisc del dev  enp5s1f0  root  netem
 
 
-网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms 
+网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms
 取消延迟: sudo tc qdisc del dev  enp4s0  root  netem
-网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms 
+网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms
 取消延迟: sudo tc qdisc del dev  enp5s1f0  root  netem
 
 网络限速：sudo tc qdisc add dev enp4s0 root tbf rate 2048kbit latency 50ms burst 2048
 取消限速：sudo tc qdisc del dev enp4s0 root
 
 网络包损坏：sudo tc  qdisc  add  dev  enp4s0  root  netem  corrupt  10%
-取消包损坏：sudo tc  qdisc  del  dev  enp4s0  root  netem  
+取消包损坏：sudo tc  qdisc  del  dev  enp4s0  root  netem
 
  ----------------------------------------end------------------------------------------------------------
- 
+
 
 
 
@@ -237,7 +237,7 @@ ctrl + o
 --color=auto ：可以将找到的关键词部分加上颜色的显示喔！
 du -a    du -h   查看大小
 df -h 查看硬盘使用
-#!/bin/bash--posix 和 #!/bin/sh  效果是一样的 
+#!/bin/bash--posix 和 #!/bin/sh  效果是一样的
 
 ssh-keygen -t rsa
 ssh-copy-id 10.10.144.10
@@ -254,11 +254,11 @@ System Info
 
 
 which  go  查找配置文件中的PATH路径
-find / -name go   
+find / -name go
 
 ed -n ‘/1-09 15:00:00/,/1-09 16:30:31/’p catalina.log > catalina.2017-01-09.log  截取日志
 
-cat peer.log* | grep -a "uChains-M" | awk -F "," '{print $1" "$3}' | awk -F " " 'BEGIN{temp=""} {if ( substr($0,1,12)!=temp ){temp=substr($0,1,12);myarr[temp]=$9} else{myarr[temp]+=$9}} END {for (key in myarr) {print key","myarr[key]}}' | sort         统计TPS 的 脚本 改了一下 
+cat peer.log* | grep -a "uChains-M" | awk -F "," '{print $1" "$3}' | awk -F " " 'BEGIN{temp=""} {if ( substr($0,1,12)!=temp ){temp=substr($0,1,12);myarr[temp]=$9} else{myarr[temp]+=$9}} END {for (key in myarr) {print key","myarr[key]}}' | sort         统计TPS 的 脚本 改了一下
 
 cat  peer.log|grep -a "\-> queue("
 
@@ -266,7 +266,7 @@ cat  peer.log|grep -a "\-> queue("
 ---------------------------------------------------脚本--------------------------
 export GOPATH=/home/mpsp/ghctender
 select count(1) from events_msg
-show full processlist 
+show full processlist
 
 BASE=/home/mpsp/ghctender/src/uchains
 TARGET=/home/mpsp/ghctender/src/target
@@ -313,12 +313,12 @@ uchains :
 120.92.115.36   ubuntu    UMFroot~!@
 120.92.117.29   ubuntu    inspection~!@
 
-node1：120.92.117.29 7451    
-node2：120.92.102.222 7451    
-node3：120.92.115.36 7451   
+node1：120.92.117.29 7451
+node2：120.92.102.222 7451
+node3：120.92.115.36 7451
 node4：120.92.115.36 17451
-	
-	
+
+
 deploy_dir = /data/project/ansible-deploy/uchains/deploy
 data_dir = /data/project/ansible-deploy/uchains/deploy
 
@@ -326,16 +326,16 @@ data_dir = /data/project/ansible-deploy/uchains/deploy
 priKeyServer:
   ip: 120.92.102.222
   port: 7153
-  
+
 priKeyServerDB:
 120.92.102.222 13306
 username: root
 password: UMF@test
 
-java 服务 
+java 服务
  120.92.115.36 :8010
  访问地址：http://uptc.umpay.com/uchains/
- 
+
 浏览器数据库：
 url: jdbc:mysql://120.92.36.160:3333/admin-prod
 username: root
@@ -353,28 +353,28 @@ TIKV 服务
 
 
 日志 路径 ：
-uchains 日志   cd /data/project/ansible-deploy/uchains/deploy/node-1/log 
+uchains 日志   cd /data/project/ansible-deploy/uchains/deploy/node-1/log
 java 日志   cd  /data/uchains-admin/log
 私钥服务器日志 : cd /home/ubuntu/nieshengfu
-中控 ： cd /home/ubuntu/project/src/uchains-ansible 
+中控 ： cd /home/ubuntu/project/src/uchains-ansible
 
-网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms 
+网络延迟：sudo tc qdisc add dev enp4s0  root netem delay 600ms
 取消延迟: sudo tc qdisc del dev  enp4s0  root  netem
-网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms 
+网络延迟：sudo tc qdisc add dev enp5s1f0  root netem delay 600ms
 取消延迟: sudo tc qdisc del dev  enp5s1f0  root  netem
 
 网络限速：sudo tc qdisc add dev enp4s0 root tbf rate 2048kbit latency 50ms burst 2048
 取消限速：sudo tc qdisc del dev enp4s0 root
 
 网络包损坏：sudo tc  qdisc  add  dev  enp4s0  root  netem  corrupt  10%
-取消包损坏：sudo tc  qdisc  del  dev  enp4s0  root  netem  
-sudo tc  qdisc  del  dev  enp5s1f0  root  netem  
+取消包损坏：sudo tc  qdisc  del  dev  enp4s0  root  netem
+sudo tc  qdisc  del  dev  enp5s1f0  root  netem
 
 网络包损坏：sudo tc  qdisc  add  dev  enp5s1f0  root  netem  corrupt  10%
 
-交易脚本 位置 ：cd /home/mpsp/goworkspace/src/uchains/script/Coupon_yace/coupon/YaCe2 
+交易脚本 位置 ：cd /home/mpsp/goworkspace/src/uchains/script/Coupon_yace/coupon/YaCe2
 SDK 位置：cd /home/mpsp/goworkspace/src/uchains/script/testgosdk/test
-抓包：sudo ngrep -W byline -d enp11s0f0  port 7451 
+抓包：sudo ngrep -W byline -d enp11s0f0  port 7451
 负载均衡日志：cat uchains.log | grep  -E "loadbalance select server|SDK begin request|loadbalance worked,select server"
 超时重试日志：tail  -f  uchains.log* | grep -v "Timer-0" | grep -E "retry" -3
 查看合约升级的日志 cat peer.log | grep "H-\[InitApp\]"
@@ -441,6 +441,41 @@ protoc --plugin=protoc-gen-grpc-java=C:\Go\bin\protoc-gen-grpc-java-1.2.0-window
 
 uChains-M
 
+*****************linux shadowsock！！*******************************************************
+1：
+systemctl stop firewalld.service（关闭防火墙）
+yum install python-pip
+pip install shadowsocks
+{
+"server":"144.202.113.175",
+"server_port":13426,
+"local_port":1080,
+"password":"chixigua123",
+"timeout":6000,
+"method":"aes-256-cfb"
+}
+2：
+start.sh
+#!/bin/bash
+nohup sslocal -c shadowsocket.json &
+
+ss -lntup|grep sslocal
+
+3:
+git clone https://github.com/rofl0r/proxychains-ng
+cd proxychains-ng
+./configure
+make && make install　　
+make install-config
+vi  /usr/local/etc/proxychains.conf (改成socks5 127.0.0.1 1080)
+
+unset http_proxy
+
+proxychains4 curl ip.cn（执行命令前需要带前缀 proxychains4）
+Strict chain ... 127.0.0.1:1080 ... ip.cn:80 ... OK
+当前 IP：47.91.1xx.1xx 来自：美国加利福尼亚州圣克拉拉 阿里云
+
+proxychains4 curl -4sSkL https://www.google.com
 
 
 
@@ -449,8 +484,3 @@ uChains-M
 
 
 
-
-
-
-
-   
