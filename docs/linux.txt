@@ -475,6 +475,10 @@ proxychains4 curl ip.cn（执行命令前需要带前缀 proxychains4）
 Strict chain ... 127.0.0.1:1080 ... ip.cn:80 ... OK
 当前 IP：47.91.1xx.1xx 来自：美国加利福尼亚州圣克拉拉 阿里云
 
+这样用每次都要在命令前输入proxychains4，比较麻烦，可以用proxychains4代理一个shell，在shell中执行的命令就会自动使用代理了，例如：
+
+proxychains4  -q /bin/bash  （默认在当前页面有用，关掉当前页要重新执行）
+
 proxychains4 curl -4sSkL https://www.google.com
 
 
